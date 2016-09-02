@@ -31,9 +31,14 @@ func publishWells(ctx publisher.Context, dataTransport publisher.DataTransport) 
 	authToken, err := getAuthToken(ctx)
 	if err != nil {
 		ctx.Logger.Error("Error authenticating to API: ", err)
+		return err
 	}
 
 	wells, err := getWells(ctx, authToken)
+	if err != nil {
+		ctx.Logger.Error("Error fetching wells from API: ", err)
+		return err
+	}
 
 	dataPoints := make([]pipeline.DataPoint, len(wells))
 
@@ -46,8 +51,9 @@ func publishWells(ctx publisher.Context, dataTransport publisher.DataTransport) 
 		}
 
 		dataPoint := pipeline.DataPoint{
-			Repository: ctx.Publisher.Repository,
+			Repository: ctx.PublisherRef.Repository,
 			Entity:     "wellheader",
+			Source:     ctx.PublisherRef.SafeName,
 			Action:     pipeline.DataPointUpsert,
 			KeyNames:   []string{"$id"},
 			Data:       wellData,
@@ -57,15 +63,22 @@ func publishWells(ctx publisher.Context, dataTransport publisher.DataTransport) 
 	}
 
 	err = dataTransport.Send(dataPoints)
-	return err
+	if err != nil {
+		ctx.Logger.Error("Error publishing data to pipeline: ", err)
+		return err
+	}
+
+	ctx.Logger.Infof("Successfully published %d wells to the pipeline", len(dataPoints))
+	return nil
+
 }
 
 func getWells(ctx publisher.Context, authToken string) ([]interface{}, error) {
 	ctx.Logger.Info("Fetching well info from API")
 
-	apiURL, valid := getStringSetting(ctx.Publisher.Settings, "apiUrl")
+	apiURL, valid := getStringSetting(ctx.PublisherRef.Settings, "api_url")
 	if !valid {
-		return nil, errors.New("Expected setting for 'apiUrl' but it was not set or not a valid string.")
+		return nil, errors.New("Expected setting for 'api_url' but it was not set or not a valid string.")
 	}
 
 	cli := http.Client{}
@@ -102,17 +115,17 @@ func getWells(ctx publisher.Context, authToken string) ([]interface{}, error) {
 func getAuthToken(ctx publisher.Context) (string, error) {
 	ctx.Logger.Info("Authenticating to Wellcast Api")
 
-	apiURL, ok := getStringSetting(ctx.Publisher.Settings, "apiUrl")
+	apiURL, ok := getStringSetting(ctx.PublisherRef.Settings, "api_url")
 	if !ok {
-		return "", fmt.Errorf("Expected setting for 'apiUrl' but it was not set or not a valid string.")
+		return "", fmt.Errorf("Expected setting for 'api_url' but it was not set or not a valid string.")
 	}
 
-	user, ok := getStringSetting(ctx.Publisher.Settings, "user")
+	user, ok := getStringSetting(ctx.PublisherRef.Settings, "user")
 	if !ok {
 		return "", fmt.Errorf("Expected setting for 'user' but it was not set or not a valid string")
 	}
 
-	password, ok := getStringSetting(ctx.Publisher.Settings, "password")
+	password, ok := getStringSetting(ctx.PublisherRef.Settings, "password")
 	if !ok {
 		return "", fmt.Errorf("Expected setting for 'password' but it was not set or not a valid string")
 	}
@@ -173,6 +186,6 @@ func getStringSetting(settings map[string]interface{}, name string) (string, boo
 
 func writeCommonLogs(ctx publisher.Context, action string) {
 	ctx.Logger.Infof("Starting action %s", action)
-	apiURL, _ := getStringSetting(ctx.Publisher.Settings, "apiUrl")
+	apiURL, _ := getStringSetting(ctx.PublisherRef.Settings, "api_url")
 	ctx.Logger.Infof("Using API Endpoint: %s", apiURL)
 }
