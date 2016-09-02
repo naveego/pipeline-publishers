@@ -7,6 +7,11 @@ import (
 
 type Publisher struct{}
 
+// NewPublisher creates a new MSSQL publisher instance
+func NewPublisher() publisher.Publisher {
+	return &Publisher{}
+}
+
 func (p *Publisher) Shapes(ctx publisher.Context) (map[string]pipeline.Shape, error) {
 	return nil, nil
 }
