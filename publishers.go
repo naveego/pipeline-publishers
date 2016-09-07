@@ -1,7 +1,7 @@
 package publishers
 
 import (
-	"github.com/naveego/pipeline-api/publisher"
+	"github.com/naveego/api/pipeline/publisher"
 	"github.com/naveego/pipeline-publishers/sql/mssql"
 	"github.com/naveego/pipeline-publishers/web/wellcast"
 )

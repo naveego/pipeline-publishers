@@ -1,8 +1,8 @@
 package mssql
 
 import (
+	"github.com/naveego/api/pipeline/publisher"
 	"github.com/naveego/api/types/pipeline"
-	"github.com/naveego/pipeline-api/publisher"
 )
 
 type Publisher struct{}
