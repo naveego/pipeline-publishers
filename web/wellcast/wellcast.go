@@ -51,9 +51,9 @@ func publishWells(ctx publisher.Context, dataTransport publisher.DataTransport) 
 		}
 
 		dataPoint := pipeline.DataPoint{
-			Repository: ctx.PublisherRef.Repository,
+			Repository: ctx.PublisherInstance.Repository,
 			Entity:     "wellheader",
-			Source:     ctx.PublisherRef.SafeName,
+			Source:     ctx.PublisherInstance.SafeName,
 			Action:     pipeline.DataPointUpsert,
 			KeyNames:   []string{"$id"},
 			Data:       wellData,
@@ -76,7 +76,7 @@ func publishWells(ctx publisher.Context, dataTransport publisher.DataTransport) 
 func getWells(ctx publisher.Context, authToken string) ([]interface{}, error) {
 	ctx.Logger.Info("Fetching well info from API")
 
-	apiURL, valid := getStringSetting(ctx.PublisherRef.Settings, "api_url")
+	apiURL, valid := getStringSetting(ctx.PublisherInstance.Settings, "api_url")
 	if !valid {
 		return nil, errors.New("Expected setting for 'api_url' but it was not set or not a valid string.")
 	}
@@ -115,17 +115,17 @@ func getWells(ctx publisher.Context, authToken string) ([]interface{}, error) {
 func getAuthToken(ctx publisher.Context) (string, error) {
 	ctx.Logger.Info("Authenticating to Wellcast Api")
 
-	apiURL, ok := getStringSetting(ctx.PublisherRef.Settings, "api_url")
+	apiURL, ok := getStringSetting(ctx.PublisherInstance.Settings, "api_url")
 	if !ok {
 		return "", fmt.Errorf("Expected setting for 'api_url' but it was not set or not a valid string.")
 	}
 
-	user, ok := getStringSetting(ctx.PublisherRef.Settings, "user")
+	user, ok := getStringSetting(ctx.PublisherInstance.Settings, "user")
 	if !ok {
 		return "", fmt.Errorf("Expected setting for 'user' but it was not set or not a valid string")
 	}
 
-	password, ok := getStringSetting(ctx.PublisherRef.Settings, "password")
+	password, ok := getStringSetting(ctx.PublisherInstance.Settings, "password")
 	if !ok {
 		return "", fmt.Errorf("Expected setting for 'password' but it was not set or not a valid string")
 	}
@@ -186,6 +186,6 @@ func getStringSetting(settings map[string]interface{}, name string) (string, boo
 
 func writeCommonLogs(ctx publisher.Context, action string) {
 	ctx.Logger.Infof("Starting action %s", action)
-	apiURL, _ := getStringSetting(ctx.PublisherRef.Settings, "api_url")
+	apiURL, _ := getStringSetting(ctx.PublisherInstance.Settings, "api_url")
 	ctx.Logger.Infof("Using API Endpoint: %s", apiURL)
 }
