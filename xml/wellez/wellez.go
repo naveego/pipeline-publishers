@@ -3,6 +3,10 @@ package wellez
 import (
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -26,7 +30,17 @@ func (p *Publisher) Shapes(ctx publisher.Context) (map[string]pipeline.Shape, er
 }
 
 func (p *Publisher) Publish(ctx publisher.Context, dataTransport publisher.DataTransport) {
-	files, err := fetchFiles(ctx)
+
+	tmpDir, err := ioutil.TempDir("", "wellezxml_")
+	if err != nil {
+		ctx.Logger.Warn("Could not create temp directory for file storage: ", err)
+		return
+	}
+	defer func(t string) {
+		os.RemoveAll(t)
+	}(tmpDir)
+
+	files, err := fetchFiles(ctx, tmpDir)
 	if err != nil {
 		ctx.Logger.Warn("Could not fetch files from FTP: ", err)
 		return
@@ -37,7 +51,7 @@ func (p *Publisher) Publish(ctx publisher.Context, dataTransport publisher.DataT
 	}
 }
 
-func fetchFiles(ctx publisher.Context) (fileInfos, error) {
+func fetchFiles(ctx publisher.Context, tmpDir string) (fileInfos, error) {
 	fileInfos := fileInfos{}
 
 	ftpAddr, valid := ctx.GetStringSetting("ftp_server")
@@ -113,7 +127,31 @@ func fetchFiles(ctx publisher.Context) (fileInfos, error) {
 		}
 
 		if info.ModifiedOn == lastSunday || info.ModifiedOn.After(lastSunday) {
+
+			ctx.Logger.Infof("Retrieving file '%s' from FTP", info.FileName)
 			fileInfos = append(fileInfos, info)
+
+			_, err := ftp.Retr(info.FileName, func(r io.Reader) error {
+
+				var file *os.File
+				if file, err = os.Create(filepath.Join(tmpDir, info.FileName)); err != nil {
+					return err
+				}
+
+				if _, err := io.Copy(file, r); err != nil {
+					return err
+				}
+
+				if err := file.Close(); err != nil {
+					return err
+				}
+
+				return nil
+			})
+
+			if err != nil {
+				return fileInfos, err
+			}
 		}
 	}
 
