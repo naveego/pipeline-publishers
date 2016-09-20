@@ -1,6 +1,8 @@
 package wellez
 
 import (
+	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -30,7 +32,6 @@ func (p *Publisher) Shapes(ctx publisher.Context) (map[string]pipeline.Shape, er
 }
 
 func (p *Publisher) Publish(ctx publisher.Context, dataTransport publisher.DataTransport) {
-
 	tmpDir, err := ioutil.TempDir("", "wellezxml_")
 	if err != nil {
 		ctx.Logger.Warn("Could not create temp directory for file storage: ", err)
@@ -46,8 +47,17 @@ func (p *Publisher) Publish(ctx publisher.Context, dataTransport publisher.DataT
 		return
 	}
 
+	err = extractFiles(ctx, tmpDir, files)
+	if err != nil {
+		ctx.Logger.Warn("Could not extract files: ", err)
+		return
+	}
+
 	for _, file := range files {
-		fmt.Println(file.FileName)
+		err = processFile(ctx, dataTransport, tmpDir, file)
+		if err != nil {
+			ctx.Logger.Warnf("Could not process file '%s': %v", file.FileName, err)
+		}
 	}
 }
 
@@ -231,4 +241,47 @@ func parseFileInfo(info string) (fileInfo, error) {
 	f.ModifiedOn = time.Date(year, time.Month(month), day, hour, minute, sec, 0, time.UTC)
 
 	return f, nil
+}
+
+func processFile(ctx publisher.Context, transport publisher.DataTransport, tmpDir string, file fileInfo) error {
+
+	xmlFile := strings.Replace(file.FileName, ".zip", ".xml", -1)
+	ctx.Logger.Infof("Processing xml file '%s", xmlFile)
+
+	f, err := os.Open(filepath.Join(tmpDir, xmlFile))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	data := Data{}
+	err = xml.NewDecoder(f).Decode(&data)
+	if err != nil {
+		return err
+	}
+
+	for _, wi := range data.WellInfo {
+		dp := pipeline.DataPoint{
+			Repository: ctx.PublisherInstance.Repository,
+			Source:     ctx.PublisherInstance.SafeName,
+			Entity:     "WellInfo",
+			Action:     "upsert",
+			KeyNames:   []string{"well_id"},
+			Data:       toJSONMap(wi),
+		}
+
+		err := transport.Send([]pipeline.DataPoint{dp})
+		if err != nil {
+			return fmt.Errorf("Could not publish data point: %v", err)
+		}
+	}
+
+	return nil
+}
+
+func toJSONMap(s interface{}) map[string]interface{} {
+	m := map[string]interface{}{}
+	b, _ := json.Marshal(s)
+	json.Unmarshal(b, &m)
+	return m
 }
