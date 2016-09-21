@@ -1,7 +1,6 @@
 package wellez
 
 type Data struct {
-	WellInfo           []WellInfo           `xml:"WellInfo>row"`
 	CompletionCost     []CompletionCost     `xml:"CompletionCost>row"`
 	CompletionCostItem []CompletionCostItem `xml:"CompletionCostItem>row"`
 	DailyOps           []DailyOps           `xml:"DailyOps>row"`
@@ -10,6 +9,7 @@ type Data struct {
 	FacilitiesCost     []FacilitiesCost     `xml:"FacilitiesCost>row"`
 	FacilitiesCostItem []FacilitiesCostItem `xml:"FacilitiesCostItem>row"`
 	JobDetails         []JobDetails         `xml:"JobDetails>row"`
+	WellInfo           []WellInfo           `xml:"WellInfo>row"`
 }
 
 type WellInfo struct {

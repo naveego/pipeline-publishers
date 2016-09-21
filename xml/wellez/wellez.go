@@ -1,10 +1,7 @@
 package wellez
 
 import (
-	"encoding/json"
-	"encoding/xml"
 	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -241,47 +238,4 @@ func parseFileInfo(info string) (fileInfo, error) {
 	f.ModifiedOn = time.Date(year, time.Month(month), day, hour, minute, sec, 0, time.UTC)
 
 	return f, nil
-}
-
-func processFile(ctx publisher.Context, transport publisher.DataTransport, tmpDir string, file fileInfo) error {
-
-	xmlFile := strings.Replace(file.FileName, ".zip", ".xml", -1)
-	ctx.Logger.Infof("Processing xml file '%s", xmlFile)
-
-	f, err := os.Open(filepath.Join(tmpDir, xmlFile))
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	data := Data{}
-	err = xml.NewDecoder(f).Decode(&data)
-	if err != nil {
-		return err
-	}
-
-	for _, wi := range data.WellInfo {
-		dp := pipeline.DataPoint{
-			Repository: ctx.PublisherInstance.Repository,
-			Source:     ctx.PublisherInstance.SafeName,
-			Entity:     "WellInfo",
-			Action:     "upsert",
-			KeyNames:   []string{"well_id"},
-			Data:       toJSONMap(wi),
-		}
-
-		err := transport.Send([]pipeline.DataPoint{dp})
-		if err != nil {
-			return fmt.Errorf("Could not publish data point: %v", err)
-		}
-	}
-
-	return nil
-}
-
-func toJSONMap(s interface{}) map[string]interface{} {
-	m := map[string]interface{}{}
-	b, _ := json.Marshal(s)
-	json.Unmarshal(b, &m)
-	return m
 }
