@@ -79,15 +79,7 @@ func sendDataPoints(ctx publisher.Context, transport publisher.DataTransport, da
 		s := reflect.ValueOf(data)
 		for i := 0; i < s.Len(); i++ {
 			datum := s.Index(i).Interface()
-			dp := pipeline.DataPoint{
-				Repository: ctx.PublisherInstance.Repository,
-				Source:     ctx.PublisherInstance.SafeName,
-				Entity:     entity,
-				Action:     "upsert",
-				KeyNames:   keyNames,
-				Data:       toJSONMap(datum),
-			}
-
+			dp := ctx.NewDataPoint(entity, keyNames, toJSONMap(datum))
 			dataPoints = append(dataPoints, dp)
 			count++
 

@@ -50,15 +50,7 @@ func publishWells(ctx publisher.Context, dataTransport publisher.DataTransport) 
 			continue
 		}
 
-		dataPoint := pipeline.DataPoint{
-			Repository: ctx.PublisherInstance.Repository,
-			Entity:     "WellAttribute",
-			Source:     ctx.PublisherInstance.SafeName,
-			Action:     pipeline.DataPointUpsert,
-			KeyNames:   []string{"$id"},
-			Data:       wellData,
-		}
-
+		dataPoint := ctx.NewDataPoint("WellAttribute", []string{"$id"}, wellData)
 		dataPoints[i] = dataPoint
 	}
 
