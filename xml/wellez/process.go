@@ -3,6 +3,8 @@ package wellez
 import (
 	"encoding/json"
 	"encoding/xml"
+	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -14,10 +16,21 @@ import (
 
 func processFile(ctx publisher.Context, transport publisher.DataTransport, tmpDir string, file fileInfo) error {
 
-	xmlFile := strings.Replace(file.FileName, ".zip", ".xml", -1)
-	ctx.Logger.Infof("Processing xml file '%s", xmlFile)
+	fileDir := filepath.Join(tmpDir, file.LocalDirName)
+	xmlFiles, err := ioutil.ReadDir(fileDir)
+	if err != nil {
+		return err
+	}
 
-	f, err := os.Open(filepath.Join(tmpDir, xmlFile))
+	if len(xmlFiles) != 1 {
+		return fmt.Errorf("Expected 1 file per archive, but found %d", len(xmlFiles))
+	}
+
+	xmlFile := xmlFiles[0].Name()
+
+	ctx.Logger.Infof("Processing data from file '%s", xmlFile)
+
+	f, err := os.Open(filepath.Join(tmpDir, file.LocalDirName, xmlFile))
 	if err != nil {
 		return err
 	}
@@ -29,28 +42,38 @@ func processFile(ctx publisher.Context, transport publisher.DataTransport, tmpDi
 		return err
 	}
 
-	if err := sendDataPoints(ctx, transport, data.CompletionCost, "CompletionCost", []string{"RowID"}); err != nil {
+	//if err := sendDataPoints(ctx, transport, data.CompletionCost, "CompletionCost", []string{"RowID"}); err != nil {
+	//	return err
+	//}
+	//if err := sendDataPoints(ctx, transport, data.CompletionCostItem, "CompletionCostItem", []string{"RowID"}); err != nil {
+	//	return err
+	//}
+	if err := sendDataPoints(ctx, transport, data.CostAllocation, "CostAllocation", []string{"RowID"}); err != nil {
 		return err
 	}
-	if err := sendDataPoints(ctx, transport, data.CompletionCostItem, "CompletionCostItem", []string{"RowID"}); err != nil {
+	if err := sendDataPoints(ctx, transport, data.CostAllocationItem, "CostAllocationItem", []string{"RowID"}); err != nil {
 		return err
 	}
-	if err := sendDataPoints(ctx, transport, data.DailyOps, "DailyOps", []string{"well_id", "report_date", "job_number"}); err != nil {
-		return err
-	}
-	if err := sendDataPoints(ctx, transport, data.DrillingCost, "DrillingCost", []string{"RowID"}); err != nil {
-		return err
-	}
-	if err := sendDataPoints(ctx, transport, data.DrillingCostItem, "DrillingCostItem", []string{"RowID"}); err != nil {
-		return err
-	}
-	if err := sendDataPoints(ctx, transport, data.FacilitiesCost, "FacilitiesCost", []string{"RowID"}); err != nil {
-		return err
-	}
-	if err := sendDataPoints(ctx, transport, data.FacilitiesCostItem, "FacilitiesCostItem", []string{"RowID"}); err != nil {
-		return err
-	}
+	//if err := sendDataPoints(ctx, transport, data.DailyOps, "DailyOps", []string{"well_id", "report_date", "job_number"}); err != nil {
+	//	return err
+	//}
+	//if err := sendDataPoints(ctx, transport, data.DrillingCost, "DrillingCost", []string{"RowID"}); err != nil {
+	//	return err
+	//}
+	//if err := sendDataPoints(ctx, transport, data.DrillingCostItem, "DrillingCostItem", []string{"RowID"}); err != nil {
+	//	return err
+	//}
+	//if err := sendDataPoints(ctx, transport, data.FacilitiesCost, "FacilitiesCost", []string{"RowID"}); err != nil {
+	//	return err
+	//}
+	//if err := sendDataPoints(ctx, transport, data.FacilitiesCostItem, "FacilitiesCostItem", []string{"RowID"}); err != nil {
+	//	return err
+	//}
 	if err := sendDataPoints(ctx, transport, data.JobDetails, "JobDetails", []string{"well_id", "job_number"}); err != nil {
+		return err
+	}
+
+	if err := sendDataPoints(ctx, transport, data.LocationInfo, "LocationInfo", []string{"RowID"}); err != nil {
 		return err
 	}
 	if err := sendDataPoints(ctx, transport, data.WellInfo, "WellInfo", []string{"well_id"}); err != nil {

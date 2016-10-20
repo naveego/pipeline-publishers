@@ -1,8 +1,11 @@
 package wellez
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 	"os/exec"
+	"path/filepath"
 
 	"github.com/naveego/api/pipeline/publisher"
 )
@@ -16,12 +19,16 @@ func extractFiles(ctx publisher.Context, tmpDir string, files fileInfos) error {
 
 	for _, file := range files {
 
-		c := exec.Command("unzip", "-P", ftpFilePwd, file.FileName)
+		outputDir := filepath.Join(tmpDir, file.LocalDirName)
+
+		errOutput := &bytes.Buffer{}
+		c := exec.Command("unzip", "-P", ftpFilePwd, file.FileName, "-d", outputDir)
 		c.Dir = tmpDir
+		c.Stderr = errOutput
 		err := c.Run()
 
 		if err != nil {
-			return err
+			return fmt.Errorf("Extract error: %s", errOutput.String())
 		}
 
 		ctx.Logger.Infof("Successfully extracted file '%s'", file.FileName)

@@ -50,7 +50,7 @@ func publishWells(ctx publisher.Context, dataTransport publisher.DataTransport) 
 			continue
 		}
 
-		dataPoint := ctx.NewDataPoint("WellAttribute", []string{"$id"}, wellData)
+		dataPoint := ctx.NewDataPoint("WellAttribute", []string{"Well ID"}, wellData)
 		dataPoints[i] = dataPoint
 	}
 
