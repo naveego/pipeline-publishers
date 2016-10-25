@@ -42,33 +42,33 @@ func processFile(ctx publisher.Context, transport publisher.DataTransport, tmpDi
 		return err
 	}
 
-	//if err := sendDataPoints(ctx, transport, data.CompletionCost, "CompletionCost", []string{"RowID"}); err != nil {
-	//	return err
-	//}
-	//if err := sendDataPoints(ctx, transport, data.CompletionCostItem, "CompletionCostItem", []string{"RowID"}); err != nil {
-	//	return err
-	//}
+	if err := sendDataPoints(ctx, transport, data.CompletionCost, "CompletionCost", []string{"RowID"}); err != nil {
+		return err
+	}
+	if err := sendDataPoints(ctx, transport, data.CompletionCostItem, "CompletionCostItem", []string{"RowID"}); err != nil {
+		return err
+	}
 	if err := sendDataPoints(ctx, transport, data.CostAllocation, "CostAllocation", []string{"RowID"}); err != nil {
 		return err
 	}
 	if err := sendDataPoints(ctx, transport, data.CostAllocationItem, "CostAllocationItem", []string{"RowID"}); err != nil {
 		return err
 	}
-	//if err := sendDataPoints(ctx, transport, data.DailyOps, "DailyOps", []string{"well_id", "report_date", "job_number"}); err != nil {
-	//	return err
-	//}
-	//if err := sendDataPoints(ctx, transport, data.DrillingCost, "DrillingCost", []string{"RowID"}); err != nil {
-	//	return err
-	//}
-	//if err := sendDataPoints(ctx, transport, data.DrillingCostItem, "DrillingCostItem", []string{"RowID"}); err != nil {
-	//	return err
-	//}
-	//if err := sendDataPoints(ctx, transport, data.FacilitiesCost, "FacilitiesCost", []string{"RowID"}); err != nil {
-	//	return err
-	//}
-	//if err := sendDataPoints(ctx, transport, data.FacilitiesCostItem, "FacilitiesCostItem", []string{"RowID"}); err != nil {
-	//	return err
-	//}
+	if err := sendDataPoints(ctx, transport, data.DailyOps, "DailyOps", []string{"well_id", "report_date", "job_number"}); err != nil {
+		return err
+	}
+	if err := sendDataPoints(ctx, transport, data.DrillingCost, "DrillingCost", []string{"RowID"}); err != nil {
+		return err
+	}
+	if err := sendDataPoints(ctx, transport, data.DrillingCostItem, "DrillingCostItem", []string{"RowID"}); err != nil {
+		return err
+	}
+	if err := sendDataPoints(ctx, transport, data.FacilitiesCost, "FacilitiesCost", []string{"RowID"}); err != nil {
+		return err
+	}
+	if err := sendDataPoints(ctx, transport, data.FacilitiesCostItem, "FacilitiesCostItem", []string{"RowID"}); err != nil {
+		return err
+	}
 	if err := sendDataPoints(ctx, transport, data.JobDetails, "JobDetails", []string{"well_id", "job_number"}); err != nil {
 		return err
 	}
