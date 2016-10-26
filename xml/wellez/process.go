@@ -54,7 +54,7 @@ func processFile(ctx publisher.Context, transport publisher.DataTransport, tmpDi
 	if err := sendDataPoints(ctx, transport, data.CostAllocationItem, "CostAllocationItem", []string{"RowID"}); err != nil {
 		return err
 	}
-	if err := sendDataPoints(ctx, transport, data.DailyOps, "DailyOps", []string{"well_id", "report_date", "job_number"}); err != nil {
+	if err := sendDataPoints(ctx, transport, data.DailyOps, "DailyOps", []string{"well_id", "report_Date", "job_number"}); err != nil {
 		return err
 	}
 	if err := sendDataPoints(ctx, transport, data.DrillingCost, "DrillingCost", []string{"RowID"}); err != nil {
