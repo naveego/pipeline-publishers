@@ -100,7 +100,7 @@ type LocationInfo struct {
 
 type CompletionCost struct {
 	WellID       int64  `json:"well_id" xml:"well_id,attr"`
-	ReportDate   string `json:"report_date" xml:"report_date,attr"`
+	ReportDate   string `json:"report_Date" xml:"report_Date,attr"`
 	JobNumber    int64  `json:"job_number" xml:"job_number,attr"`
 	ReportTypeID int64  `json:"ReportTypeID" xml:"ReportTypeID,attr"`
 	Comment      string `json:"Comment" xml:"Comment,attr"`
@@ -110,7 +110,7 @@ type CompletionCost struct {
 
 type CompletionCostItem struct {
 	WellID       int64   `json:"well_id" xml:"well_id,attr"`
-	ReportDate   string  `json:"report_date" xml:"report_date,attr"`
+	ReportDate   string  `json:"report_Date" xml:"report_Date,attr"`
 	LineNumber   int64   `json:"line_number" xml:"line_number,attr"`
 	JobNumber    int64   `json:"job_number" xml:"job_number,attr"`
 	Vendor       string  `json:"Vendor" xml:"Vendor,attr"`
@@ -144,7 +144,7 @@ type CostAllocationItem struct {
 
 type DailyOps struct {
 	WellID        int64   `json:"well_id" xml:"well_id,attr"`
-	ReportDate    string  `json:"report_date" xml:"report_date,attr"`
+	ReportDate    string  `json:"report_Date" xml:"report_Date,attr"`
 	JobNumber     int64   `json:"job_number" xml:"job_number,attr"`
 	WellStatus    string  `json:"WellStatus" xml:"WellStatus,attr"`
 	UserDefined1  string  `json:"UserDefined_1" xml:"UserDefined_1,attr"`
@@ -184,7 +184,7 @@ type DailyOps struct {
 
 type DrillingCost struct {
 	WellID       int64  `json:"well_id" xml:"well_id,attr"`
-	ReportDate   string `json:"report_date" xml:"report_date,attr"`
+	ReportDate   string `json:"report_Date" xml:"report_Date,attr"`
 	JobNumber    int64  `json:"job_number" xml:"job_number,attr"`
 	ReportTypeID int64  `json:"ReportTypeID" xml:"ReportTypeID,attr"`
 	Comment      string `json:"Comment" xml:"Comment,attr"`
@@ -194,7 +194,7 @@ type DrillingCost struct {
 
 type DrillingCostItem struct {
 	WellID       int64   `json:"well_id" xml:"well_id,attr"`
-	ReportDate   string  `json:"report_date" xml:"report_date,attr"`
+	ReportDate   string  `json:"report_Date" xml:"report_Date,attr"`
 	LineNumber   int64   `json:"line_number" xml:"line_number,attr"`
 	JobNumber    int64   `json:"job_number" xml:"job_number,attr"`
 	Vendor       string  `json:"Vendor" xml:"Vendor,attr"`
@@ -209,7 +209,7 @@ type DrillingCostItem struct {
 
 type FacilitiesCost struct {
 	WellID       int64  `json:"well_id" xml:"well_id,attr"`
-	ReportDate   string `json:"report_date" xml:"report_date,attr"`
+	ReportDate   string `json:"report_Date" xml:"report_Date,attr"`
 	JobNumber    int64  `json:"job_number" xml:"job_number,attr"`
 	ReportTypeID int64  `json:"ReportTypeID" xml:"ReportTypeID,attr"`
 	Comment      string `json:"Comment" xml:"Comment,attr"`
@@ -219,7 +219,7 @@ type FacilitiesCost struct {
 
 type FacilitiesCostItem struct {
 	WellID       int64   `json:"well_id" xml:"well_id,attr"`
-	ReportDate   string  `json:"report_date" xml:"report_date,attr"`
+	ReportDate   string  `json:"report_Date" xml:"report_Date,attr"`
 	LineNumber   int64   `json:"line_number" xml:"line_number,attr"`
 	JobNumber    int64   `json:"job_number" xml:"job_number,attr"`
 	Vendor       string  `json:"Vendor" xml:"Vendor,attr"`
