@@ -177,6 +177,9 @@ type DailyOps struct {
 	UserDefined28 string  `json:"UserDefined_28" xml:"UserDefined_28,attr"`
 	UserDefined29 string  `json:"UserDefined_29" xml:"UserDefined_29,attr"`
 	UserDefined30 string  `json:"UserDefined_30" xml:"UserDefined_30,attr"`
+	UserDefined31 string  `json:"UserDefined_28" xml:"UserDefined_31,attr"`
+	UserDefined32 string  `json:"UserDefined_29" xml:"UserDefined_32,attr"`
+	UserDefined33 string  `json:"UserDefined_30" xml:"UserDefined_33,attr"`
 	TripGas       float64 `json:"TripGas" xml:"TripGas,attr"`
 	TVD           float64 `json:"TVD" xml:"TVD,attr"`
 	TMD           float64 `json:"TMD" xml:"TMD,attr"`
