@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/naveego/api/pipeline/publisher"
 	"github.com/naveego/api/types/pipeline"
@@ -98,6 +99,21 @@ func getWells(ctx publisher.Context, authToken string) ([]interface{}, error) {
 		return nil, fmt.Errorf("Could not read API response: %v", err)
 	}
 
+	// We cannot send over any properties that contain restricted property
+	// name characters.
+	for _, wellRaw := range wells {
+		well, ok := wellRaw.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("Invalid Well record. Unexpected Type")
+		}
+
+		for k := range well {
+			if strings.Contains(k, ":") {
+				delete(well, k)
+			}
+		}
+	}
+
 	ctx.Logger.Infof("Successfully fetched %d wells from API", len(wells))
 
 	return wells, nil
@@ -174,6 +190,7 @@ func getStringSetting(settings map[string]interface{}, name string) (string, boo
 	}
 
 	return value, true
+
 }
 
 func writeCommonLogs(ctx publisher.Context, action string) {
