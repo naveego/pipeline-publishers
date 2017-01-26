@@ -94,6 +94,7 @@ func getWells(ctx publisher.Context, authToken string) ([]interface{}, error) {
 	}
 
 	var wells []interface{}
+	var scrubbedWells []interface{}
 	err = json.NewDecoder(resp.Body).Decode(&wells)
 	if err != nil {
 		return nil, fmt.Errorf("Could not read API response: %v", err)
@@ -112,11 +113,13 @@ func getWells(ctx publisher.Context, authToken string) ([]interface{}, error) {
 				delete(well, k)
 			}
 		}
+
+		scrubbedWells = append(scrubbedWells, well)
 	}
 
-	ctx.Logger.Infof("Successfully fetched %d wells from API", len(wells))
+	ctx.Logger.Infof("Successfully fetched %d wells from API", len(scrubbedWells))
 
-	return wells, nil
+	return scrubbedWells, nil
 
 }
 
