@@ -19,7 +19,11 @@ func NewPublisher() publisher.Publisher {
 	return &Publisher{}
 }
 
-func (p *Publisher) Shapes(ctx publisher.Context) (map[string]pipeline.Shape, error) {
+func (p *Publisher) TestConnection(ctx publisher.Context, connSettings map[string]interface{}) (bool, string, error) {
+	return true, "", nil
+}
+
+func (p *Publisher) Shapes(ctx publisher.Context) (pipeline.ShapeDefinitions, error) {
 	return nil, nil
 }
 
