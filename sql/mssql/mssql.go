@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/naveego/api/pipeline/publisher"
@@ -57,7 +58,7 @@ INNER JOIN sys.schemas s ON (o.schema_id = s.schema_id)
 INNER JOIN sys.columns c ON (o.object_id = c.object_id)
 INNER JOIN sys.types ty ON (c.user_type_id = ty.user_type_id)
 where type IN ('U', 'V')
-ORDER BY o.Name, c.column_id`)
+ORDER BY s.Name, o.Name, c.column_id`)
 
 	if err != nil {
 		return defs, err
@@ -99,6 +100,9 @@ ORDER BY o.Name, c.column_id`)
 	for _, sd := range s {
 		defs = append(defs, *sd)
 	}
+
+	// Sort the shapes by Name
+	sort.Sort(pipeline.SortShapesByName(defs))
 
 	return defs, nil
 }
