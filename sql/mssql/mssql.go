@@ -136,6 +136,8 @@ func buildConnectionString(settings map[string]interface{}, timeout int) (string
 		pwd, _ := mr.ReadString("password")
 		connStr = append(connStr, "user id="+username)
 		connStr = append(connStr, "password="+pwd)
+	} else {
+		connStr = append(connStr, "")
 	}
 
 	return strings.Join(connStr, ";"), nil
