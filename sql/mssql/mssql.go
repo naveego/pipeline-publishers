@@ -80,7 +80,7 @@ ORDER BY s.Name, o.Name, c.column_id`)
 
 		shapeName := tableName
 		if schemaName != "dbo" {
-			shapeName = fmt.Sprintf("%s_%s", schemaName, tableName)
+			shapeName = fmt.Sprintf("%s__%s", schemaName, tableName)
 		}
 
 		shapeDef, ok := s[shapeName]
@@ -107,7 +107,76 @@ ORDER BY s.Name, o.Name, c.column_id`)
 	return defs, nil
 }
 
-func (p *Publisher) Publish(ctx publisher.Context, dataTransport publisher.DataTransport) {
+func (p *Publisher) Publish(ctx publisher.Context, shape pipeline.ShapeDefinition, dataTransport publisher.DataTransport) {
+
+	connString, err := buildConnectionString(ctx.PublisherInstance.Settings, 30)
+	if err != nil {
+		ctx.Logger.Warn("Could not connect to publihser", err)
+		return
+	}
+	conn, err := sql.Open("mssql", connString)
+	if err != nil {
+		ctx.Logger.Warn("Could not open connection to publisher", err)
+		return
+	}
+	defer conn.Close()
+
+	columns := []string{}
+
+	for _, v := range shape.Properties {
+		columns = append(columns, v.Name)
+	}
+
+	schemaName := "dbo"
+	tableName := shape.Name
+
+	if strings.Contains(shape.Name, "__") {
+		idx := strings.Index(shape.Name, "__")
+		schemaName = tableName[:idx]
+		tableName = tableName[idx+2:]
+	}
+
+	colStr := "[" + strings.Join(columns, "],[") + "]"
+	query := fmt.Sprintf("SELECT %s FROM [%s].[%s]", colStr, schemaName, tableName)
+
+	ctx.Logger.Debugf("Query: %s", query)
+	rows, err := conn.Query(query)
+	if err != nil {
+		ctx.Logger.Warn("Could not query publisher", err)
+		return
+	}
+	defer rows.Close()
+
+	vals := make([]interface{}, len(columns))
+	for i := 0; i < len(columns); i++ {
+		vals[i] = new(interface{})
+	}
+
+	for rows.Next() {
+		err := rows.Scan(vals...)
+		if err != nil {
+			ctx.Logger.Warn("Error reading row", err)
+			continue
+		}
+
+		d := map[string]interface{}{}
+
+		for i := 0; i < len(vals); i++ {
+			colName := columns[i]
+			d[colName] = vals[i]
+		}
+
+		dp := pipeline.DataPoint{
+			Repository: "matador",
+			Source:     ctx.PublisherInstance.ID,
+			Data:       d,
+		}
+
+		dps := []pipeline.DataPoint{dp}
+		dataTransport.Send(dps)
+
+	}
+
 }
 
 func buildConnectionString(settings map[string]interface{}, timeout int) (string, error) {
