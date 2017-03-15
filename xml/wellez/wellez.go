@@ -34,7 +34,7 @@ func (p *Publisher) Shapes(ctx publisher.Context) (pipeline.ShapeDefinitions, er
 	return nil, nil
 }
 
-func (p *Publisher) Publish(ctx publisher.Context, dataTransport publisher.DataTransport) {
+func (p *Publisher) Publish(ctx publisher.Context, shape pipeline.ShapeDefinition, dataTransport publisher.DataTransport) {
 	tmpDir, err := ioutil.TempDir("", "wellezxml_")
 	if err != nil {
 		ctx.Logger.Warn("Could not create temp directory for file storage: ", err)

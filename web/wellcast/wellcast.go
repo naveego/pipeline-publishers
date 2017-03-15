@@ -27,7 +27,7 @@ func (p *Publisher) Shapes(ctx publisher.Context) (pipeline.ShapeDefinitions, er
 	return nil, nil
 }
 
-func (p *Publisher) Publish(ctx publisher.Context, dataTransport publisher.DataTransport) {
+func (p *Publisher) Publish(ctx publisher.Context, shape pipeline.ShapeDefinition, dataTransport publisher.DataTransport) {
 	writeCommonLogs(ctx, "publish")
 	publishWells(ctx, dataTransport)
 }
