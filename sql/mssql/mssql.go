@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/naveego/api/pipeline/publisher"
 	"github.com/naveego/api/types/pipeline"
 	"github.com/naveego/api/utils"
@@ -186,7 +185,6 @@ func (p *Publisher) Publish(ctx publisher.Context, shape pipeline.ShapeDefinitio
 			Data:       d,
 		}
 
-		logrus.Infof("Sending Data Point")
 		dps := []pipeline.DataPoint{dp}
 		dataTransport.Send(dps)
 
