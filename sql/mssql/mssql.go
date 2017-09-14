@@ -7,20 +7,23 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/naveego/api/pipeline/publisher"
 	"github.com/naveego/api/types/pipeline"
 	"github.com/naveego/api/utils"
 )
 
-type Publisher struct{}
+type Publisher struct {
+	conn *sql.DB
+}
 
 // NewPublisher creates a new MSSQL publisher instance
 func NewPublisher() publisher.Publisher {
 	return &Publisher{}
 }
 
-func (p *Publisher) TestConnection(ctx publisher.Context, connSettings map[string]interface{}) (bool, string, error) {
-	connString, err := buildConnectionString(connSettings, 10)
+func (p *Publisher) TestConnection(ctx publisher.Context) (bool, string, error) {
+	connString, err := buildConnectionString(ctx.Settings, 10)
 	if err != nil {
 		return false, "could not connect to server", err
 	}
@@ -39,10 +42,34 @@ func (p *Publisher) TestConnection(ctx publisher.Context, connSettings map[strin
 	return true, "successfully connected to server", nil
 }
 
+func (p *Publisher) Init(ctx publisher.Context) error {
+	connString, err := buildConnectionString(ctx.Settings, 30)
+	if err != nil {
+		ctx.Logger.Warn("Could not connect to publisher", err)
+		return err
+	}
+	conn, err := sql.Open("mssql", connString)
+	if err != nil {
+		ctx.Logger.Warn("Could not open connection to publisher", err)
+		return err
+	}
+	p.conn = conn
+	return nil
+}
+
+func (p *Publisher) Dispose(ctx publisher.Context) error {
+	if p.conn != nil {
+		p.conn.Close()
+		p.conn = nil
+	}
+
+	return nil
+}
+
 func (p *Publisher) Shapes(ctx publisher.Context) (pipeline.ShapeDefinitions, error) {
 	defs := pipeline.ShapeDefinitions{}
 
-	connString, err := buildConnectionString(ctx.PublisherInstance.Settings, 30)
+	connString, err := buildConnectionString(ctx.Settings, 30)
 	if err != nil {
 		return defs, err
 	}
@@ -109,18 +136,6 @@ ORDER BY s.Name, o.Name, c.column_id`)
 
 func (p *Publisher) Publish(ctx publisher.Context, shape pipeline.ShapeDefinition, dataTransport publisher.DataTransport) {
 
-	connString, err := buildConnectionString(ctx.PublisherInstance.Settings, 30)
-	if err != nil {
-		ctx.Logger.Warn("Could not connect to publihser", err)
-		return
-	}
-	conn, err := sql.Open("mssql", connString)
-	if err != nil {
-		ctx.Logger.Warn("Could not open connection to publisher", err)
-		return
-	}
-	defer conn.Close()
-
 	columns := []string{}
 
 	for _, v := range shape.Properties {
@@ -140,7 +155,7 @@ func (p *Publisher) Publish(ctx publisher.Context, shape pipeline.ShapeDefinitio
 	query := fmt.Sprintf("SELECT %s FROM [%s].[%s]", colStr, schemaName, tableName)
 
 	ctx.Logger.Debugf("Query: %s", query)
-	rows, err := conn.Query(query)
+	rows, err := p.conn.Query(query)
 	if err != nil {
 		ctx.Logger.Warn("Could not query publisher", err)
 		return
@@ -168,14 +183,16 @@ func (p *Publisher) Publish(ctx publisher.Context, shape pipeline.ShapeDefinitio
 
 		dp := pipeline.DataPoint{
 			Repository: "matador",
-			Source:     ctx.PublisherInstance.ID,
 			Data:       d,
 		}
 
+		logrus.Infof("Sending Data Point")
 		dps := []pipeline.DataPoint{dp}
 		dataTransport.Send(dps)
 
 	}
+
+	dataTransport.Done()
 
 }
 
