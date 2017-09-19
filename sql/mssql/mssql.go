@@ -212,7 +212,7 @@ func buildConnectionString(settings map[string]interface{}, timeout int) (string
 	connStr := []string{
 		"server=" + server,
 		"database=" + db,
-		"connection timeout=10",
+		"connection timeout=300",
 	}
 
 	if auth == "sql" {
