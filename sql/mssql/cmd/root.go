@@ -17,22 +17,18 @@ var verbose *bool
 var RootCmd = &cobra.Command{
 	Use:   "mssql",
 	Short: "A publisher that pulls data from MS SQL Server",
+	Args:  cobra.ExactArgs(1),
 	Long:  ``,
 	RunE: func(cmd *cobra.Command, args []string) error {
 
 		logrus.SetOutput(os.Stdout)
 
-		if len(os.Args) < 2 {
-			fmt.Println("Not enough arguments.")
-			os.Exit(-1)
-		}
-
 		addr := args[0]
 
-		if *verbose {
-			fmt.Println("Verbose logging")
-			logrus.SetLevel(logrus.DebugLevel)
-		}
+		//if *verbose {
+		fmt.Println("Verbose logging")
+		logrus.SetLevel(logrus.DebugLevel)
+		//}
 
 		publisher := NewClient()
 

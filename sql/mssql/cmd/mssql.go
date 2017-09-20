@@ -67,6 +67,8 @@ func (m *mssqlClient) Dispose(protocol.DisposeRequest) (protocol.DisposeResponse
 }
 
 func (m *mssqlClient) Publish(request protocol.PublishRequest, toClient protocol.PublisherClient) (protocol.PublishResponse, error) {
+	logrus.WithField("publish-request", request).Debug("Publish")
+
 	e := func(msg string) (protocol.PublishResponse, error) {
 		return protocol.PublishResponse{Message: msg}, errors.New(msg)
 	}
@@ -177,9 +179,10 @@ func (m *mssqlClient) Publish(request protocol.PublishRequest, toClient protocol
 			}
 
 			dp := pipeline.DataPoint{
-				Entity: shapeDef.Name,
-				Data:   d,
-				Shape:  shape,
+				Entity:   shapeDef.Name,
+				Data:     d,
+				KeyNames: shape.KeyNames,
+				Shape:    shape,
 			}
 
 			dps := []pipeline.DataPoint{dp}
@@ -225,13 +228,30 @@ func discoverShapes(conn *sql.DB) ([]pipeline.ShapeDefinition, error) {
 		shapes []pipeline.ShapeDefinition
 	)
 
-	rows, err := conn.Query(`select s.Name, o.Name, c.Name, ty.name from
-		sys.objects o
-		INNER JOIN sys.schemas s ON (o.schema_id = s.schema_id)
-		INNER JOIN sys.columns c ON (o.object_id = c.object_id)
-		INNER JOIN sys.types ty ON (c.user_type_id = ty.user_type_id)
-		where type IN ('U', 'V')
-		ORDER BY s.Name, o.Name, c.column_id`)
+	rows, err := conn.Query(`SELECT Schema_name(o.schema_id) SchemaName, 
+	o.NAME                   TableName, 
+	col.NAME                 ColumnName, 
+	ty.NAME                  TypeName, 
+	CASE 
+	  WHEN EXISTS (SELECT 1 
+				   FROM   sys.indexes ind 
+						  INNER JOIN sys.index_columns indcol 
+								  ON indcol.object_id = o.object_id 
+									 AND indcol.index_id = ind.index_id 
+									 AND col.column_id = indcol.column_id 
+				   WHERE  ind.object_id = o.object_id 
+						  AND ind.is_primary_key = 1) THEN 1 
+	  ELSE 0 
+	END                      AS IsPrimaryKey 
+FROM   sys.objects o 
+	INNER JOIN sys.columns col 
+			ON col.object_id = o.object_id 
+	INNER JOIN sys.types ty 
+			ON ( col.user_type_id = ty.user_type_id ) 
+WHERE  o.type IN ( 'U', 'V' ) 
+ORDER  BY Schema_name(o.schema_id), 
+	   o.NAME, 
+	   col.column_id`)
 
 	if err != nil {
 		return shapes, err
@@ -242,13 +262,14 @@ func discoverShapes(conn *sql.DB) ([]pipeline.ShapeDefinition, error) {
 	var tableName string
 	var columnName string
 	var columnType string
+	var isPrimaryKey bool
 
 	s := map[string]*pipeline.ShapeDefinition{}
 
 	for rows.Next() {
-		err = rows.Scan(&schemaName, &tableName, &columnName, &columnType)
+		err = rows.Scan(&schemaName, &tableName, &columnName, &columnType, &isPrimaryKey)
 		if err != nil {
-			continue
+			return nil, err
 		}
 
 		shapeName := tableName
@@ -268,6 +289,10 @@ func discoverShapes(conn *sql.DB) ([]pipeline.ShapeDefinition, error) {
 			Name: columnName,
 			Type: convertSQLType(columnType),
 		})
+
+		if isPrimaryKey {
+			shapeDef.Keys = append(shapeDef.Keys, columnName)
+		}
 	}
 
 	for _, sd := range s {
@@ -343,25 +368,17 @@ func buildConnectionString(settings map[string]interface{}, timeout int) (string
 }
 
 func convertSQLType(t string) string {
-	switch t {
-	case "datetime":
-	case "date":
-	case "time":
-	case "smalldatetime":
+	text := strings.ToLower(strings.Split(t, "(")[0])
+
+	switch text {
+	case "datetime", "datetime2", "date", "time", "smalldatetime":
 		return "date"
-	case "bigint":
-	case "int":
-	case "smallint":
-	case "tinyint":
+	case "bigint", "int", "smallint", "tinyint":
 		return "integer"
-	case "decimal":
-	case "float":
-	case "money":
-	case "smallmoney":
+	case "decimal", "float", "money", "smallmoney":
 		return "float"
 	case "bit":
 		return "bool"
 	}
-
 	return "string"
 }
