@@ -23,11 +23,11 @@ func (p *Publisher) TestConnection(ctx publisher.Context, connSettings map[strin
 	return true, "", nil
 }
 
-func (p *Publisher) Shapes(ctx publisher.Context) (pipeline.ShapeDefinitions, error) {
+func (p *Publisher) Shapes(ctx publisher.Context) (map[string]pipeline.Shape, error) {
 	return nil, nil
 }
 
-func (p *Publisher) Publish(ctx publisher.Context, shape pipeline.ShapeDefinition, dataTransport publisher.DataTransport) {
+func (p *Publisher) Publish(ctx publisher.Context, dataTransport publisher.DataTransport) {
 	writeCommonLogs(ctx, "publish")
 	publishWells(ctx, dataTransport)
 }

@@ -26,15 +26,11 @@ func NewPublisher() publisher.Publisher {
 	return &Publisher{}
 }
 
-func (p *Publisher) TestConnection(ctx publisher.Context, connSettings map[string]interface{}) (bool, string, error) {
-	return true, "", nil
-}
-
-func (p *Publisher) Shapes(ctx publisher.Context) (pipeline.ShapeDefinitions, error) {
+func (p *Publisher) Shapes(ctx publisher.Context) (map[string]pipeline.Shape, error) {
 	return nil, nil
 }
 
-func (p *Publisher) Publish(ctx publisher.Context, shape pipeline.ShapeDefinition, dataTransport publisher.DataTransport) {
+func (p *Publisher) Publish(ctx publisher.Context, dataTransport publisher.DataTransport) {
 	tmpDir, err := ioutil.TempDir("", "wellezxml_")
 	if err != nil {
 		ctx.Logger.Warn("Could not create temp directory for file storage: ", err)
@@ -139,7 +135,9 @@ func fetchFiles(ctx publisher.Context, tmpDir string) (fileInfos, error) {
 			continue
 		}
 
-		if info.ModifiedOn == lastSunday || info.ModifiedOn.After(lastSunday) {
+		modifiedDate := info.ModifiedOn.Truncate(24 * time.Hour)
+
+		if shouldProcessFile(lastSunday, modifiedDate) {
 
 			ctx.Logger.Infof("Retrieving file '%s' from FTP", info.FileName)
 			fileInfos = append(fileInfos, info)
@@ -171,6 +169,18 @@ func fetchFiles(ctx publisher.Context, tmpDir string) (fileInfos, error) {
 	sort.Sort(fileInfos)
 	return fileInfos, nil
 
+}
+
+func shouldProcessFile(lastSunday, modifiedOn time.Time) bool {
+	if modifiedOn.Weekday() == time.Sunday && time.Now().Weekday() == time.Sunday {
+		return true
+	}
+
+	if modifiedOn.After(lastSunday) && modifiedOn.Weekday() != time.Sunday {
+		return true
+	}
+
+	return false
 }
 
 type fileInfo struct {
