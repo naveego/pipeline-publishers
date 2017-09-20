@@ -25,10 +25,10 @@ var RootCmd = &cobra.Command{
 
 		addr := args[0]
 
-		//if *verbose {
-		fmt.Println("Verbose logging")
-		logrus.SetLevel(logrus.DebugLevel)
-		//}
+		if *verbose {
+			fmt.Println("Verbose logging")
+			logrus.SetLevel(logrus.DebugLevel)
+		}
 
 		publisher := NewClient()
 
