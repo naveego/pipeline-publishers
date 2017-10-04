@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -17,10 +16,17 @@ import (
 func processFile(ctx publisher.Context, transport publisher.DataTransport, tmpDir string, file fileInfo) error {
 
 	fileDir := filepath.Join(tmpDir, file.LocalDirName)
-	xmlFiles, err := ioutil.ReadDir(fileDir)
-	if err != nil {
-		return err
-	}
+	var xmlFiles []os.FileInfo
+
+	filepath.Walk(fileDir, func(path string, f os.FileInfo, _ error) error {
+		if !f.IsDir() {
+			if strings.HasSuffix(f.Name(), ".xml") {
+				xmlFiles = append(xmlFiles, f)
+			}
+		}
+
+		return nil
+	})
 
 	if len(xmlFiles) != 1 {
 		return fmt.Errorf("Expected 1 file per archive, but found %d", len(xmlFiles))

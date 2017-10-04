@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dutchcoders/goftp"
+	goftp "github.com/jlaffaye/ftp"
 	"github.com/naveego/api/pipeline/publisher"
 	"github.com/naveego/api/types/pipeline"
 )
@@ -88,17 +88,27 @@ func fetchFiles(ctx publisher.Context, tmpDir string) (fileInfos, error) {
 	if err != nil {
 		return fileInfos, errors.New("Could not connect to FTP Server: " + err.Error())
 	}
-	defer ftp.Close()
+	defer func() {
+		ftp.Logout()
+		ftp.Quit()
+	}()
 
 	err = ftp.Login(ftpUser, ftpPwd)
 	if err != nil {
 		return fileInfos, errors.New("Could not login to FTP server: " + err.Error())
 	}
 
-	err = ftp.Cwd("/")
+	err = ftp.ChangeDir("/XML Exports/Synergy Resources")
 	if err != nil {
-		return fileInfos, errors.New("Could not set CWD to '/': " + err.Error())
+		return fileInfos, errors.New("Could not set CWD to '/XML Exports/Synergy Resources': " + err.Error())
 	}
+
+	var curpath string
+	if curpath, err = ftp.CurrentDir(); err != nil {
+		return fileInfos, errors.New("Could not get PWD: " + err.Error())
+	}
+
+	ctx.Logger.Infof("Current path: %s", curpath)
 
 	files, err := ftp.List("")
 	if err != nil {
@@ -125,40 +135,44 @@ func fetchFiles(ctx publisher.Context, tmpDir string) (fileInfos, error) {
 	}
 
 	for _, file := range files {
-		info, err := parseFileInfo(file)
-		if err != nil {
-			ctx.Logger.Warnf("Could not parse file info: %v", err)
+
+		if file.Name == "." || file.Name == ".." {
 			continue
 		}
 
-		if info.FileName == "." || info.FileName == ".." {
+		if file.Type == goftp.EntryTypeFolder {
 			continue
 		}
 
-		modifiedDate := info.ModifiedOn.Truncate(24 * time.Hour)
+		modifiedDate := file.Time.Truncate(24 * time.Hour)
 
 		if shouldProcessFile(lastSunday, modifiedDate) {
 
-			ctx.Logger.Infof("Retrieving file '%s' from FTP", info.FileName)
-			fileInfos = append(fileInfos, info)
+			ctx.Logger.Infof("Retrieving file '%s' from FTP", file.Name)
 
-			_, err := ftp.Retr(info.FileName, func(r io.Reader) error {
-
-				var file *os.File
-				if file, err = os.Create(filepath.Join(tmpDir, info.FileName)); err != nil {
-					return err
-				}
-
-				if _, err := io.Copy(file, r); err != nil {
-					return err
-				}
-
-				if err := file.Close(); err != nil {
-					return err
-				}
-
-				return nil
+			fileInfos = append(fileInfos, fileInfo{
+				FileName:   file.Name,
+				ModifiedOn: file.Time,
 			})
+
+			rr, err := ftp.Retr(file.Name)
+			if err != nil {
+				return fileInfos, err
+			}
+
+			ctx.Logger.Infof("Using Temp Dir: %s", tmpDir)
+			var outFile *os.File
+			if outFile, err = os.Create(filepath.Join(tmpDir, file.Name)); err != nil {
+				return fileInfos, err
+			}
+
+			if _, err := io.Copy(outFile, rr); err != nil {
+				return fileInfos, err
+			}
+
+			if err := outFile.Close(); err != nil {
+				return fileInfos, err
+			}
 
 			if err != nil {
 				return fileInfos, err
