@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/naveego/navigator-go/publishers/server"
 	"github.com/spf13/cobra"
 )
