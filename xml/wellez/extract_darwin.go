@@ -20,9 +20,10 @@ func extractFiles(ctx publisher.Context, tmpDir string, files fileInfos) error {
 	for _, file := range files {
 
 		outputDir := filepath.Join(tmpDir, file.LocalDirName)
+		inFile := filepath.Join(tmpDir, file.LocalDirName, file.FileName)
 
 		errOutput := &bytes.Buffer{}
-		c := exec.Command("unzip", "-P", ftpFilePwd, file.FileName, "-d", outputDir)
+		c := exec.Command("unzip", "-P", ftpFilePwd, inFile, "-d", outputDir)
 		c.Dir = tmpDir
 		c.Stderr = errOutput
 		err := c.Run()

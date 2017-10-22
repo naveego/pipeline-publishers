@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Sirupsen/logrus"
 	goftp "github.com/jlaffaye/ftp"
 	"github.com/naveego/api/pipeline/publisher"
 	"github.com/naveego/api/types/pipeline"
@@ -58,6 +59,7 @@ func (p *Publisher) Publish(ctx publisher.Context, dataTransport publisher.DataT
 			ctx.Logger.Warnf("Could not process file '%s': %v", file.FileName, err)
 		}
 	}
+
 }
 
 func fetchFiles(ctx publisher.Context, tmpDir string) (fileInfos, error) {
@@ -117,21 +119,21 @@ func fetchFiles(ctx publisher.Context, tmpDir string) (fileInfos, error) {
 
 	now := time.Now()
 	currentYear, currentMonth, currentDay := now.Date()
-	lastSunday := time.Date(currentYear, currentMonth, currentDay, 0, 0, 0, 0, time.UTC)
+	lastSaturday := time.Date(currentYear, currentMonth, currentDay, 0, 0, 0, 0, time.UTC)
 
 	switch now.Weekday() {
+	case time.Sunday:
+		lastSaturday = lastSaturday.AddDate(0, 0, -1)
 	case time.Monday:
-		lastSunday = lastSunday.AddDate(0, 0, -1)
+		lastSaturday = lastSaturday.AddDate(0, 0, -2)
 	case time.Tuesday:
-		lastSunday = lastSunday.AddDate(0, 0, -2)
+		lastSaturday = lastSaturday.AddDate(0, 0, -3)
 	case time.Wednesday:
-		lastSunday = lastSunday.AddDate(0, 0, -3)
+		lastSaturday = lastSaturday.AddDate(0, 0, -4)
 	case time.Thursday:
-		lastSunday = lastSunday.AddDate(0, 0, -4)
+		lastSaturday = lastSaturday.AddDate(0, 0, -5)
 	case time.Friday:
-		lastSunday = lastSunday.AddDate(0, 0, -5)
-	case time.Saturday:
-		lastSunday = lastSunday.AddDate(0, 0, -6)
+		lastSaturday = lastSaturday.AddDate(0, 0, -6)
 	}
 
 	for _, file := range files {
@@ -144,35 +146,14 @@ func fetchFiles(ctx publisher.Context, tmpDir string) (fileInfos, error) {
 			continue
 		}
 
-		modifiedDate := file.Time.Truncate(24 * time.Hour)
+		fileTimeLocal := file.Time.Local()
+		modifiedDate := time.Date(fileTimeLocal.Year(), fileTimeLocal.Month(), fileTimeLocal.Day(), 0, 0, 0, 0, fileTimeLocal.Location())
 
-		if shouldProcessFile(lastSunday, modifiedDate) {
+		if shouldProcessFile(lastSaturday, modifiedDate) {
+			logrus.Infof("Modified On: %v", modifiedDate)
+			fi, err := downloadFile(tmpDir, ctx, ftp, file)
 
-			ctx.Logger.Infof("Retrieving file '%s' from FTP", file.Name)
-
-			fileInfos = append(fileInfos, fileInfo{
-				FileName:   file.Name,
-				ModifiedOn: file.Time,
-			})
-
-			rr, err := ftp.Retr(file.Name)
-			if err != nil {
-				return fileInfos, err
-			}
-
-			ctx.Logger.Infof("Using Temp Dir: %s", tmpDir)
-			var outFile *os.File
-			if outFile, err = os.Create(filepath.Join(tmpDir, file.Name)); err != nil {
-				return fileInfos, err
-			}
-
-			if _, err := io.Copy(outFile, rr); err != nil {
-				return fileInfos, err
-			}
-
-			if err := outFile.Close(); err != nil {
-				return fileInfos, err
-			}
+			fileInfos = append(fileInfos, fi)
 
 			if err != nil {
 				return fileInfos, err
@@ -185,16 +166,51 @@ func fetchFiles(ctx publisher.Context, tmpDir string) (fileInfos, error) {
 
 }
 
-func shouldProcessFile(lastSunday, modifiedOn time.Time) bool {
-	if modifiedOn.Weekday() == time.Sunday && time.Now().Weekday() == time.Sunday {
+func shouldProcessFile(lastSaturday, modifiedOn time.Time) bool {
+
+	today := time.Now().Truncate(24 * time.Hour)
+	if modifiedOn.Weekday() == time.Saturday && modifiedOn == today {
 		return true
 	}
 
-	if modifiedOn.After(lastSunday) && modifiedOn.Weekday() != time.Sunday {
+	if modifiedOn.After(lastSaturday) && modifiedOn.Weekday() != time.Saturday {
 		return true
 	}
 
 	return false
+}
+
+func downloadFile(tmpDir string, ctx publisher.Context, ftp *goftp.ServerConn, file *goftp.Entry) (fileInfo, error) {
+	ctx.Logger.Infof("Retrieving file '%s' from FTP", file.Name)
+
+	info := fileInfo{
+		FileName:     file.Name,
+		ModifiedOn:   file.Time,
+		LocalDirName: file.Name[:(len(file.Name) - len(filepath.Ext(file.Name)))],
+	}
+
+	rr, err := ftp.Retr(file.Name)
+	if err != nil {
+		return info, err
+	}
+	defer rr.Close()
+
+	os.Mkdir(filepath.Join(tmpDir, info.LocalDirName), 0700)
+	ctx.Logger.Infof("Using Temp Dir: %s/%s", tmpDir, info.LocalDirName)
+	var outFile *os.File
+	if outFile, err = os.Create(filepath.Join(tmpDir, info.LocalDirName, file.Name)); err != nil {
+		return info, err
+	}
+
+	if _, err := io.Copy(outFile, rr); err != nil {
+		return info, err
+	}
+
+	if err := outFile.Close(); err != nil {
+		return info, err
+	}
+
+	return info, nil
 }
 
 type fileInfo struct {
