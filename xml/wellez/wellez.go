@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -18,6 +19,14 @@ import (
 	"github.com/naveego/api/pipeline/publisher"
 	"github.com/naveego/api/types/pipeline"
 )
+
+var fullNameExp *regexp.Regexp
+var incNameExp *regexp.Regexp
+
+func init() {
+	fullNameExp = regexp.MustCompile(`^Synergy_Resources_[0-9]{8}-[0-9]{8}.zip$`)
+	incNameExp = regexp.MustCompile(`^Synergy_Resources_[0-9]{8}.zip$`)
+}
 
 type Publisher struct {
 }
@@ -147,10 +156,9 @@ func fetchFiles(ctx publisher.Context, tmpDir string) (fileInfos, error) {
 		}
 
 		fileTimeLocal := file.Time.Local()
-		modifiedDate := time.Date(fileTimeLocal.Year(), fileTimeLocal.Month(), fileTimeLocal.Day(), 0, 0, 0, 0, fileTimeLocal.Location())
 
-		if shouldProcessFile(lastSaturday, modifiedDate) {
-			logrus.Infof("Modified On: %v", modifiedDate)
+		if shouldProcessFile(file.Name, lastSaturday, fileTimeLocal) {
+			logrus.Infof("Modified On: %v", fileTimeLocal)
 			fi, err := downloadFile(tmpDir, ctx, ftp, file)
 
 			fileInfos = append(fileInfos, fi)
@@ -166,15 +174,15 @@ func fetchFiles(ctx publisher.Context, tmpDir string) (fileInfos, error) {
 
 }
 
-func shouldProcessFile(lastSaturday, modifiedOn time.Time) bool {
+func shouldProcessFile(fileName string, lastSaturday, modifiedOn time.Time) bool {
+	if modifiedOn == lastSaturday || modifiedOn.After(lastSaturday) {
+		if incNameExp.MatchString(fileName) {
+			return true
+		}
 
-	today := time.Now().Truncate(24 * time.Hour)
-	if modifiedOn.Weekday() == time.Saturday && modifiedOn == today {
-		return true
-	}
-
-	if modifiedOn.After(lastSaturday) && modifiedOn.Weekday() != time.Saturday {
-		return true
+		if fullNameExp.MatchString(fileName) && (time.Now().Weekday() == time.Saturday || time.Now().Weekday() == time.Sunday) {
+			return true
+		}
 	}
 
 	return false
