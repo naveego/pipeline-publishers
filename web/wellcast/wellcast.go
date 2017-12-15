@@ -78,8 +78,13 @@ func getWells(ctx publisher.Context, authToken string) ([]interface{}, error) {
 		return nil, errors.New("Expected setting for 'api_url' but it was not set or not a valid string.")
 	}
 
+	layoutName, valid := getStringSetting(ctx.PublisherInstance.Settings, "layout_name")
+	if !valid {
+		return nil, errors.New("Expected settings for 'layout_name' but was not set or not a valid string.")
+	}
+
 	cli := http.Client{}
-	resourceURL := fmt.Sprintf("%s/api/v1/Custom/getWellAttribute", apiURL)
+	resourceURL := fmt.Sprintf("%s/api/v1/Custom/getLayoutAttribute?Layout=%s", apiURL, layoutName)
 	req, err := http.NewRequest("GET", resourceURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Error creating request: %v", err)
