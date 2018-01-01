@@ -24,8 +24,8 @@ var fullNameExp *regexp.Regexp
 var incNameExp *regexp.Regexp
 
 func init() {
-	fullNameExp = regexp.MustCompile(`^Synergy_Resources_[0-9]{8}-[0-9]{8}.zip$`)
-	incNameExp = regexp.MustCompile(`^Synergy_Resources_[0-9]{8}.zip$`)
+	fullNameExp = regexp.MustCompile(`^Synergy_Resources_[0-9]{8}-([0-9]{8}).zip$`)
+	incNameExp = regexp.MustCompile(`^Synergy_Resources_([0-9]{8}).zip$`)
 }
 
 type Publisher struct {
@@ -155,23 +155,9 @@ func fetchFiles(ctx publisher.Context, tmpDir string) (fileInfos, error) {
 			continue
 		}
 
-		fileTimeLocal := file.Time.Local()
-		// fix date translation issue in go-ftp package
-		fileTimeLocal = time.Date(
-			time.Now().Year(),
-			fileTimeLocal.Month(),
-			fileTimeLocal.Day(),
-			fileTimeLocal.Hour(),
-			fileTimeLocal.Minute(),
-			fileTimeLocal.Second(),
-			fileTimeLocal.Nanosecond(),
-			fileTimeLocal.Location(),
-		)
-
-		if shouldProcessFile(file.Name, lastSaturday, fileTimeLocal) {
-			logrus.Infof("Modified On: %v", fileTimeLocal)
+		if fileDate, ok := shouldProcessFile(file.Name, lastSaturday); ok {
 			fi, err := downloadFile(tmpDir, ctx, ftp, file)
-
+			fi.ModifiedOn = *fileDate
 			fileInfos = append(fileInfos, fi)
 
 			if err != nil {
@@ -185,18 +171,37 @@ func fetchFiles(ctx publisher.Context, tmpDir string) (fileInfos, error) {
 
 }
 
-func shouldProcessFile(fileName string, lastSaturday, modifiedOn time.Time) bool {
-	if modifiedOn == lastSaturday || modifiedOn.After(lastSaturday) {
-		if incNameExp.MatchString(fileName) {
-			return true
-		}
+func shouldProcessFile(fileName string, lastSaturday time.Time) (*time.Time, bool) {
+	dateStr := ""
+	isResetFile := false
 
-		if fullNameExp.MatchString(fileName) && (time.Now().Weekday() == time.Saturday || time.Now().Weekday() == time.Sunday) {
-			return true
-		}
+	if incNameExp.MatchString(fileName) {
+		dateStr = incNameExp.FindStringSubmatch(fileName)[1]
+	} else if fullNameExp.MatchString(fileName) {
+		dateStr = fullNameExp.FindStringSubmatch(fileName)[1]
+		isResetFile = true
 	}
 
-	return false
+	if dateStr == "" {
+		return nil, false
+	}
+
+	fileDate, err := time.Parse("20060102", dateStr)
+	if err != nil {
+		logrus.Warnf("Could not parse file date '%s': %v", dateStr, err)
+		return &fileDate, false
+	}
+
+	if fileDate == lastSaturday || fileDate.After(lastSaturday) {
+		if isResetFile && fileDate.Unix() >= lastSaturday.Unix() {
+			return &fileDate, time.Now().Weekday() == time.Sunday
+		}
+
+		return &fileDate, true
+	}
+
+	return nil, false
+
 }
 
 func downloadFile(tmpDir string, ctx publisher.Context, ftp *goftp.ServerConn, file *goftp.Entry) (fileInfo, error) {
