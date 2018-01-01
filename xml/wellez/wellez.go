@@ -156,6 +156,17 @@ func fetchFiles(ctx publisher.Context, tmpDir string) (fileInfos, error) {
 		}
 
 		fileTimeLocal := file.Time.Local()
+		// fix date translation issue in go-ftp package
+		fileTimeLocal = time.Date(
+			time.Now().Year(),
+			fileTimeLocal.Month(),
+			fileTimeLocal.Day(),
+			fileTimeLocal.Hour(),
+			fileTimeLocal.Minute(),
+			fileTimeLocal.Second(),
+			fileTimeLocal.Nanosecond(),
+			fileTimeLocal.Location(),
+		)
 
 		if shouldProcessFile(file.Name, lastSaturday, fileTimeLocal) {
 			logrus.Infof("Modified On: %v", fileTimeLocal)
