@@ -194,7 +194,7 @@ func shouldProcessFile(fileName string, lastSaturday time.Time) (*time.Time, boo
 
 	if fileDate == lastSaturday || fileDate.After(lastSaturday) {
 		if isResetFile && fileDate.Unix() >= lastSaturday.Unix() {
-			return &fileDate, time.Now().Weekday() == time.Sunday
+			return &fileDate, time.Now().Weekday() == time.Saturday
 		}
 
 		return &fileDate, true
