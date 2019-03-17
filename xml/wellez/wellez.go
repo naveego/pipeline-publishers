@@ -1,32 +1,23 @@
 package wellez
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"regexp"
-	"sort"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	goftp "github.com/jlaffaye/ftp"
 	"github.com/naveego/api/pipeline/publisher"
 	"github.com/naveego/api/types/pipeline"
 )
 
-var fullNameExp *regexp.Regexp
-var incNameExp *regexp.Regexp
+var fullNameFormat = "Synergy_Resources_20010101-%s.zip"
+var nameFormat = "Synergy_Resources_%s.zip"
 
-func init() {
-	fullNameExp = regexp.MustCompile(`^Synergy_Resources_[0-9]{8}-([0-9]{8}).zip$`)
-	incNameExp = regexp.MustCompile(`^Synergy_Resources_([0-9]{8}).zip$`)
-}
 
 type Publisher struct {
 }
@@ -121,99 +112,67 @@ func fetchFiles(ctx publisher.Context, tmpDir string) (fileInfos, error) {
 
 	ctx.Logger.Infof("Current path: %s", curpath)
 
-	files, err := ftp.List("")
-	if err != nil {
-		return fileInfos, errors.New("Could not list contents of FTP folder: " + err.Error())
-	}
-
 	now := time.Now()
 	currentYear, currentMonth, currentDay := now.Date()
 	lastSaturday := time.Date(currentYear, currentMonth, currentDay, 0, 0, 0, 0, time.UTC)
 
+	ctx.Logger.Infof("Current Dates: Year=%v, Month=%v, Day=%v", currentYear, currentMonth, currentDay)
+
+	daysToProcess := 0
+
 	switch now.Weekday() {
 	case time.Sunday:
 		lastSaturday = lastSaturday.AddDate(0, 0, -1)
+		daysToProcess = 1
 	case time.Monday:
 		lastSaturday = lastSaturday.AddDate(0, 0, -2)
+		daysToProcess = 2
 	case time.Tuesday:
 		lastSaturday = lastSaturday.AddDate(0, 0, -3)
+		daysToProcess = 3
 	case time.Wednesday:
 		lastSaturday = lastSaturday.AddDate(0, 0, -4)
+		daysToProcess = 4
 	case time.Thursday:
 		lastSaturday = lastSaturday.AddDate(0, 0, -5)
+		daysToProcess = 5
 	case time.Friday:
 		lastSaturday = lastSaturday.AddDate(0, 0, -6)
+		daysToProcess = 6
+	}
+
+	var files []string
+
+	if daysToProcess == 0 {
+		files = append(files, fmt.Sprintf(fullNameFormat, now.Format("20060102")))
+	} else {
+		for i := 0; i < daysToProcess; i++ {
+			day := lastSaturday.AddDate(0, 0, i+1)
+			files = append(files, fmt.Sprintf(nameFormat, day.Format("20060102")))
+		}
 	}
 
 	for _, file := range files {
+		fi, err := downloadFile(tmpDir, ctx, ftp, file)
+		fileInfos = append(fileInfos, fi)
 
-		if file.Name == "." || file.Name == ".." {
-			continue
-		}
-
-		if file.Type == goftp.EntryTypeFolder {
-			continue
-		}
-
-		if fileDate, ok := shouldProcessFile(file.Name, lastSaturday); ok {
-			fi, err := downloadFile(tmpDir, ctx, ftp, file)
-			fi.ModifiedOn = *fileDate
-			fileInfos = append(fileInfos, fi)
-
-			if err != nil {
-				return fileInfos, err
-			}
+		if err != nil {
+			return fileInfos, err
 		}
 	}
 
-	sort.Sort(fileInfos)
 	return fileInfos, nil
-
 }
 
-func shouldProcessFile(fileName string, lastSaturday time.Time) (*time.Time, bool) {
-	dateStr := ""
-	isResetFile := false
-
-	if incNameExp.MatchString(fileName) {
-		dateStr = incNameExp.FindStringSubmatch(fileName)[1]
-	} else if fullNameExp.MatchString(fileName) {
-		dateStr = fullNameExp.FindStringSubmatch(fileName)[1]
-		isResetFile = true
-	}
-
-	if dateStr == "" {
-		return nil, false
-	}
-
-	fileDate, err := time.Parse("20060102", dateStr)
-	if err != nil {
-		logrus.Warnf("Could not parse file date '%s': %v", dateStr, err)
-		return &fileDate, false
-	}
-
-	if fileDate == lastSaturday || fileDate.After(lastSaturday) {
-		if isResetFile && fileDate.Unix() >= lastSaturday.Unix() {
-			return &fileDate, time.Now().Weekday() == time.Saturday
-		}
-
-		return &fileDate, true
-	}
-
-	return nil, false
-
-}
-
-func downloadFile(tmpDir string, ctx publisher.Context, ftp *goftp.ServerConn, file *goftp.Entry) (fileInfo, error) {
-	ctx.Logger.Infof("Retrieving file '%s' from FTP", file.Name)
+func downloadFile(tmpDir string, ctx publisher.Context, ftp *goftp.ServerConn, file string) (fileInfo, error) {
+	ctx.Logger.Infof("Retrieving file '%s' from FTP", file)
 
 	info := fileInfo{
-		FileName:     file.Name,
-		ModifiedOn:   file.Time,
-		LocalDirName: file.Name[:(len(file.Name) - len(filepath.Ext(file.Name)))],
+		FileName:     file,
+		LocalDirName: file[:(len(file) - len(filepath.Ext(file)))],
 	}
 
-	rr, err := ftp.Retr(file.Name)
+	rr, err := ftp.Retr(file)
 	if err != nil {
 		return info, err
 	}
@@ -222,7 +181,7 @@ func downloadFile(tmpDir string, ctx publisher.Context, ftp *goftp.ServerConn, f
 	os.Mkdir(filepath.Join(tmpDir, info.LocalDirName), 0700)
 	ctx.Logger.Infof("Using Temp Dir: %s/%s", tmpDir, info.LocalDirName)
 	var outFile *os.File
-	if outFile, err = os.Create(filepath.Join(tmpDir, info.LocalDirName, file.Name)); err != nil {
+	if outFile, err = os.Create(filepath.Join(tmpDir, info.LocalDirName, file)); err != nil {
 		return info, err
 	}
 
@@ -240,96 +199,6 @@ func downloadFile(tmpDir string, ctx publisher.Context, ftp *goftp.ServerConn, f
 type fileInfo struct {
 	FileName     string
 	LocalDirName string // Used to obfuscate the file names
-	ModifiedOn   time.Time
 }
 
 type fileInfos []fileInfo
-
-func (f fileInfos) Len() int {
-	return len(f)
-}
-
-func (f fileInfos) Swap(i, j int) {
-	f[i], f[j] = f[j], f[i]
-}
-
-func (f fileInfos) Less(i, j int) bool {
-	f1 := f[i]
-	f2 := f[j]
-	return f1.ModifiedOn.Before(f2.ModifiedOn)
-}
-
-func parseFileInfo(info string) (fileInfo, error) {
-	f := fileInfo{}
-
-	parts := strings.Split(info, ";")
-
-	f.FileName = strings.TrimSpace(parts[len(parts)-1])
-	f.LocalDirName, _ = generateRandomString(16)
-
-	modifyStr := parts[0]
-	modifyParts := strings.Split(modifyStr, "=")
-	dateStr := modifyParts[1]
-	yearStr := dateStr[:4]
-	monthStr := dateStr[4:6]
-	dayStr := dateStr[6:8]
-	hourStr := dateStr[8:10]
-	minuteStr := dateStr[10:12]
-	secStr := dateStr[12:14]
-
-	year, err := strconv.Atoi(yearStr)
-	if err != nil {
-		return f, err
-	}
-
-	month, err := strconv.Atoi(monthStr)
-	if err != nil {
-		return f, err
-	}
-
-	day, err := strconv.Atoi(dayStr)
-	if err != nil {
-		return f, err
-	}
-
-	hour, err := strconv.Atoi(hourStr)
-	if err != nil {
-		return f, err
-	}
-
-	minute, err := strconv.Atoi(minuteStr)
-	if err != nil {
-		return f, err
-	}
-
-	sec, err := strconv.Atoi(secStr)
-	if err != nil {
-		return f, err
-	}
-
-	f.ModifiedOn = time.Date(year, time.Month(month), day, hour, minute, sec, 0, time.UTC)
-
-	return f, nil
-}
-
-// GenerateRandomBytes returns securely generated random bytes.
-// It will return an error if the system's secure random
-// number generator fails to function correctly, in which
-// case the caller should not continue.
-func generateRandomBytes(n int) ([]byte, error) {
-	b := make([]byte, n)
-	_, err := rand.Read(b)
-	// Note that err == nil only if we read len(b) bytes.
-	if err != nil {
-		return nil, err
-	}
-
-	return b, nil
-}
-
-// GenerateRandomString returns a URL-safe, base64 encoded
-// securely generated random string.
-func generateRandomString(s int) (string, error) {
-	b, err := generateRandomBytes(s)
-	return base64.URLEncoding.EncodeToString(b), err
-}
