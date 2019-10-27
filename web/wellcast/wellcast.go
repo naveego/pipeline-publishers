@@ -1,11 +1,16 @@
 package wellcast
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"sort"
 	"strings"
+
+	_ "github.com/denisenkom/go-mssqldb"
 
 	"github.com/naveego/api/pipeline/publisher"
 	"github.com/naveego/api/types/pipeline"
@@ -45,9 +50,21 @@ func publishWells(ctx publisher.Context, dataTransport publisher.DataTransport) 
 		return err
 	}
 
-	dataPoints := make([]pipeline.DataPoint, len(wells))
+	sqlServer := os.Getenv("SRC_SQL_SERVER")
+	sqlPort := os.Getenv("SRC_SQL_PORT")
+	sqlUser := os.Getenv("SRC_SQL_USER")
+	sqlPwd := os.Getenv("SRC_SQL_PWD")
 
+	connString := fmt.Sprintf("server=%s;port=%s;user id=%s;password=%s;database=synergy", sqlServer, sqlPort, sqlUser, sqlPwd)
+	conn, err:= sql.Open("mssql", connString)
+	if err != nil {
+		return err
+	}
+
+	dataPoints := make([]pipeline.DataPoint, len(wells))
+	count := 0
 	for i, well := range wells {
+		count++
 
 		wellData, ok := well.(map[string]interface{})
 
@@ -57,15 +74,26 @@ func publishWells(ctx publisher.Context, dataTransport publisher.DataTransport) 
 
 		dataPoint := ctx.NewDataPoint("WellAttribute", []string{"Well ID"}, wellData)
 		dataPoints[i] = dataPoint
+
+		if count == 250 {
+
+			if err := insertDataPoints(ctx, conn, "WellAttribute", dataPoints, []string{"Well ID"}); err != nil {
+				return err
+			}
+
+			count = 0
+			dataPoints = []pipeline.DataPoint{}
+		}
 	}
 
-	err = dataTransport.Send(dataPoints)
-	if err != nil {
-		ctx.Logger.Error("Error publishing data to pipeline: ", err)
-		return err
+	if len(dataPoints) > 0 {
+		if err := insertDataPoints(ctx, conn, "WellAttribute", dataPoints, []string{"Well ID"}); err != nil {
+			return err
+		}
 	}
 
-	ctx.Logger.Infof("Successfully published %d wells to the pipeline", len(dataPoints))
+
+	ctx.Logger.Infof("Successfully published %d wells to the pipeline", count)
 	return nil
 
 }
@@ -209,4 +237,68 @@ func writeCommonLogs(ctx publisher.Context, action string) {
 	ctx.Logger.Infof("Starting action %s", action)
 	apiURL, _ := getStringSetting(ctx.PublisherInstance.Settings, "api_url")
 	ctx.Logger.Infof("Using API Endpoint: %s", apiURL)
+}
+
+
+func insertDataPoints(ctx publisher.Context, conn *sql.DB, entity string, data []pipeline.DataPoint, keyColumns []string) error {
+
+	firstDp := data[0]
+
+	deleteStmt := fmt.Sprintf("DELETE FROM [wellcast].[%s] WHERE ", entity)
+	for _, dp := range data {
+		deleteStmt += "("
+
+		for _, pk := range keyColumns {
+			pkv := dp.Data[pk]
+			pkvS := strings.Replace(fmt.Sprintf("%v", pkv), "'", "''", -1)
+			deleteStmt += fmt.Sprintf("[%s] = '%v' AND ", pk, pkvS)
+		}
+		deleteStmt = deleteStmt[0:len(deleteStmt) - 5] + ") OR "
+	}
+	deleteStmt = deleteStmt[0:len(deleteStmt) - 4]
+
+	_, e := conn.Exec(deleteStmt)
+	if e != nil {
+		ctx.Logger.Error(e)
+		ctx.Logger.Info(deleteStmt)
+	}
+
+	var fields []string
+	for k := range firstDp.Data {
+		fields = append(fields, k)
+	}
+
+	sort.Strings(fields)
+
+	insertStmt := fmt.Sprintf("INSERT INTO [wellcast].[%s] (", entity)
+	for _, k := range fields {
+		insertStmt += "[" + k + "], "
+	}
+
+	insertStmt = insertStmt[0:len(insertStmt)-2] + ") VALUES "
+
+	for _, dp := range data {
+		insertStmt += "("
+
+		for _, k := range fields {
+			v := dp.Data[k]
+			if v == nil {
+				insertStmt += "NULL, "
+			} else {
+				vStr := strings.Replace(fmt.Sprintf("%v", v), "'", "''", -1)
+				insertStmt += "'" + vStr + "', "
+			}
+		}
+
+		insertStmt = insertStmt[0:len(insertStmt)-2] + "),"
+	}
+
+	insertStmt = insertStmt[0:len(insertStmt)-1]
+
+	_, e = conn.Exec(insertStmt)
+	if e != nil {
+		ctx.Logger.Error(e)
+		ctx.Logger.Info(insertStmt)
+	}
+	return nil
 }

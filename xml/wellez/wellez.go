@@ -154,10 +154,8 @@ func fetchFiles(ctx publisher.Context, tmpDir string) (fileInfos, error) {
 
 	for _, file := range files {
 		fi, err := downloadFile(tmpDir, ctx, ftp, file)
-		fileInfos = append(fileInfos, fi)
-
-		if err != nil {
-			return fileInfos, err
+		if err == nil {
+			fileInfos = append(fileInfos, fi)
 		}
 	}
 

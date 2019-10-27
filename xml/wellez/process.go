@@ -7,10 +7,15 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
+	"database/sql"
+
+	_ "github.com/denisenkom/go-mssqldb"
 
 	"github.com/naveego/api/pipeline/publisher"
 	"github.com/naveego/api/types/pipeline"
+
 )
 
 func processFile(ctx publisher.Context, transport publisher.DataTransport, tmpDir string, file fileInfo) error {
@@ -48,41 +53,52 @@ func processFile(ctx publisher.Context, transport publisher.DataTransport, tmpDi
 		return err
 	}
 
-	if err := sendDataPoints(ctx, transport, data.CompletionCost, "CompletionCost", []string{"RowID"}); err != nil {
-		return err
-	}
-	if err := sendDataPoints(ctx, transport, data.CompletionCostItem, "CompletionCostItem", []string{"RowID"}); err != nil {
-		return err
-	}
-	if err := sendDataPoints(ctx, transport, data.CostAllocation, "CostAllocation", []string{"RowID"}); err != nil {
-		return err
-	}
-	if err := sendDataPoints(ctx, transport, data.CostAllocationItem, "CostAllocationItem", []string{"RowID"}); err != nil {
-		return err
-	}
-	if err := sendDataPoints(ctx, transport, data.DailyOps, "DailyOps", []string{"well_id", "report_Date", "job_number"}); err != nil {
-		return err
-	}
-	if err := sendDataPoints(ctx, transport, data.DrillingCost, "DrillingCost", []string{"RowID"}); err != nil {
-		return err
-	}
-	if err := sendDataPoints(ctx, transport, data.DrillingCostItem, "DrillingCostItem", []string{"RowID"}); err != nil {
-		return err
-	}
-	if err := sendDataPoints(ctx, transport, data.FacilitiesCost, "FacilitiesCost", []string{"RowID"}); err != nil {
-		return err
-	}
-	if err := sendDataPoints(ctx, transport, data.FacilitiesCostItem, "FacilitiesCostItem", []string{"RowID"}); err != nil {
-		return err
-	}
-	if err := sendDataPoints(ctx, transport, data.JobDetails, "JobDetails", []string{"well_id", "job_number"}); err != nil {
+	sqlServer := os.Getenv("SRC_SQL_SERVER")
+	sqlPort := os.Getenv("SRC_SQL_PORT")
+	sqlUser := os.Getenv("SRC_SQL_USER")
+	sqlPwd := os.Getenv("SRC_SQL_PWD")
+
+	connString := fmt.Sprintf("server=%s;port=%s;user id=%s;password=%s;database=synergy", sqlServer, sqlPort, sqlUser, sqlPwd)
+	conn, err:= sql.Open("mssql", connString)
+	if err != nil {
 		return err
 	}
 
-	if err := sendDataPoints(ctx, transport, data.LocationInfo, "LocationInfo", []string{"RowID"}); err != nil {
+	if err := sendDataPoints(ctx, conn, data.CompletionCost, "CompletionCost", []string{"RowID"}); err != nil {
 		return err
 	}
-	if err := sendDataPoints(ctx, transport, data.WellInfo, "WellInfo", []string{"well_id"}); err != nil {
+	if err := sendDataPoints(ctx, conn, data.CompletionCostItem, "CompletionCostItem", []string{"RowID"}); err != nil {
+		return err
+	}
+	if err := sendDataPoints(ctx, conn, data.CostAllocation, "CostAllocation", []string{"RowID"}); err != nil {
+		return err
+	}
+	if err := sendDataPoints(ctx, conn, data.CostAllocationItem, "CostAllocationItem", []string{"RowID"}); err != nil {
+		return err
+	}
+	if err := sendDataPoints(ctx, conn, data.DailyOps, "DailyOps", []string{"well_id", "report_Date", "job_number"}); err != nil {
+		return err
+	}
+	if err := sendDataPoints(ctx, conn, data.DrillingCost, "DrillingCost", []string{"RowID"}); err != nil {
+		return err
+	}
+	if err := sendDataPoints(ctx, conn, data.DrillingCostItem, "DrillingCostItem", []string{"RowID"}); err != nil {
+		return err
+	}
+	if err := sendDataPoints(ctx, conn, data.FacilitiesCost, "FacilitiesCost", []string{"RowID"}); err != nil {
+		return err
+	}
+	if err := sendDataPoints(ctx, conn, data.FacilitiesCostItem, "FacilitiesCostItem", []string{"RowID"}); err != nil {
+		return err
+	}
+	if err := sendDataPoints(ctx, conn, data.JobDetails, "JobDetails", []string{"well_id", "job_number"}); err != nil {
+		return err
+	}
+
+	if err := sendDataPoints(ctx, conn, data.LocationInfo, "LocationInfo", []string{"RowID"}); err != nil {
+		return err
+	}
+	if err := sendDataPoints(ctx, conn, data.WellInfo, "WellInfo", []string{"well_id"}); err != nil {
 		return err
 	}
 
@@ -98,10 +114,13 @@ func toJSONMap(s interface{}) map[string]interface{} {
 	return m
 }
 
-func sendDataPoints(ctx publisher.Context, transport publisher.DataTransport, data interface{}, entity string, keyNames []string) error {
+func sendDataPoints(ctx publisher.Context, conn *sql.DB, data interface{}, entity string, keyNames []string) error {
 
 	dataPoints := []pipeline.DataPoint{}
 	count := 0
+	total := 0
+
+
 
 	switch reflect.TypeOf(data).Kind() {
 	case reflect.Slice:
@@ -111,23 +130,96 @@ func sendDataPoints(ctx publisher.Context, transport publisher.DataTransport, da
 			dp := ctx.NewDataPoint(entity, keyNames, toJSONMap(datum))
 			dataPoints = append(dataPoints, dp)
 			count++
+			total++
 
-			if count == 100 {
-				if err := transport.Send(dataPoints); err != nil {
+			if count == 250 {
+
+				if err := insertDataPoints(ctx, conn, entity, dataPoints, keyNames); err != nil {
 					return err
 				}
 
 				count = 0
 				dataPoints = []pipeline.DataPoint{}
 			}
+
+			if (total % 10000) == 0 {
+				ctx.Logger.Info("Loaded %v data points for %s", total, entity)
+			}
 		}
 	}
 
 	if len(dataPoints) > 0 {
-		if err := transport.Send(dataPoints); err != nil {
+		if err := insertDataPoints(ctx, conn, entity, dataPoints, keyNames); err != nil {
 			return err
 		}
 	}
 
+	ctx.Logger.Info(fmt.Sprintf("Successfully processed %v data points for %s", total, entity))
+
 	return nil
 }
+
+func insertDataPoints(ctx publisher.Context, conn *sql.DB, entity string, data []pipeline.DataPoint, keyColumns []string) error {
+
+	firstDp := data[0]
+
+	deleteStmt := fmt.Sprintf("DELETE FROM [wellez].[%s] WHERE ", entity)
+	for _, dp := range data {
+		deleteStmt += "("
+
+		for _, pk := range keyColumns {
+			pkv := dp.Data[pk]
+			pkvS := strings.Replace(fmt.Sprintf("%v", pkv), "'", "''", -1)
+			deleteStmt += fmt.Sprintf("[%s] = '%v' AND ", pk, pkvS)
+		}
+		deleteStmt = deleteStmt[0:len(deleteStmt) - 5] + ") OR "
+	}
+	deleteStmt = deleteStmt[0:len(deleteStmt) - 4]
+
+	_, e := conn.Exec(deleteStmt)
+	if e != nil {
+		ctx.Logger.Error(e)
+		ctx.Logger.Info(deleteStmt)
+	}
+
+	var fields []string
+	for k := range firstDp.Data {
+		fields = append(fields, k)
+	}
+
+	sort.Strings(fields)
+
+	insertStmt := fmt.Sprintf("INSERT INTO [wellez].[%s] (", entity)
+	for _, k := range fields {
+		insertStmt += "[" + k + "], "
+	}
+
+	insertStmt = insertStmt[0:len(insertStmt)-2] + ") VALUES "
+
+	for _, dp := range data {
+		insertStmt += "("
+
+		for _, k := range fields {
+			v := dp.Data[k]
+			if v == nil {
+				insertStmt += "NULL, "
+			} else {
+				vStr := strings.Replace(fmt.Sprintf("%v", v), "'", "''", -1)
+				insertStmt += "'" + vStr + "', "
+			}
+		}
+
+		insertStmt = insertStmt[0:len(insertStmt)-2] + "),"
+	}
+
+	insertStmt = insertStmt[0:len(insertStmt)-1]
+
+	_, e = conn.Exec(insertStmt)
+	if e != nil {
+		ctx.Logger.Error(e)
+		ctx.Logger.Info(insertStmt)
+	}
+	return nil
+}
+
+
